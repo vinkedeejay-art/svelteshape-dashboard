@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SvelteShape — Centre de Commande IA</title>
+  <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Jost', 'Inter', sans-serif; background: #F4EEE6; color: #1C140E; min-height: 100vh; }
+
+    /* MODALE CLE API */
+    #api-modal {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(28,20,14,0.85); backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #api-modal.hidden { display: none; }
+    .modal-box {
+      background: #FAF8F5; border-radius: 16px; padding: 32px;
+      max-width: 440px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .modal-box h2 { font-size: 18px; font-weight: 700; color: #1C140E; margin-bottom: 8px; }
+    .modal-box p  { font-size: 13px; color: #7C5A3C; margin-bottom: 20px; line-height: 1.6; }
+    .modal-box input {
+      width: 100%; border: 1.5px solid #F4EEE6; border-radius: 10px;
+      padding: 12px 14px; font-size: 14px; color: #1C140E; outline: none;
+      font-family: inherit; transition: border-color .2s;
+    }
+    .modal-box input:focus { border-color: #5C3317; }
+    #btn-confirm {
+      width: 100%; margin-top: 12px; background: #5C3317; color: #fff;
+      border: none; border-radius: 999px; padding: 13px;
+      font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    #btn-skip {
+      display: block; width: 100%; margin-top: 10px; background: none;
+      border: none; font-size: 12px; color: #7C5A3C; cursor: pointer;
+      font-family: inherit; text-align: center;
+    }
+
+    /* HEADER */
+    .header {
+      background: #43240F; padding: 16px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .logo-icon {
+      background: #C9A84C; border-radius: 8px; width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 800; color: #43240F;
+    }
+    .logo-name { color: #FAF8F5; font-weight: 700; font-size: 16px; }
+    .logo-name span { color: #C9A84C; }
+    .logo-sub { color: rgba(250,248,245,0.5); font-size: 11px; }
+    .status-badge {
+      background: rgba(201,168,76,0.15); border: 1px solid rgba(201,168,76,0.3);
+      border-radius: 999px; padding: 4px 12px; font-size: 12px; color: #C9A84C;
+    }
+
+    /* TABS */
+    .tabs {
+      background: white; border-bottom: 1px solid #F4EEE6;
+      display: flex; padding: 0 24px;
+    }
+    .tab-btn {
+      background: none; border: none; border-bottom: 2px solid transparent;
+      padding: 14px 20px; font-size: 14px; font-weight: 600;
+      color: #7C5A3C; cursor: pointer; font-family: inherit; transition: all .2s;
+    }
+    .tab-btn.active { border-bottom-color: #5C3317; color: #5C3317; }
+
+    /* CONTENU */
+    .content { padding: 24px; max-width: 900px; margin: 0 auto; }
+    .tab-panel { display: none; animation: fadeIn .3s ease; }
+    .tab-panel.active { display: flex; flex-direction: column; gap: 20px; }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes spin   { to { transform: rotate(360deg); } }
+
+    /* KPIs */
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .kpi-card {
+      background: white; border-radius: 12px; padding: 16px;
+      border: 1px solid #F4EEE6; box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    }
+    .kpi-label { font-size: 12px; color: #7C5A3C; margin-bottom: 6px; font-weight: 500; }
+    .kpi-value { font-size: 28px; font-weight: 800; color: #1C140E; display: inline; }
+    .kpi-trend { font-size: 16px; font-weight: 700; margin-left: 8px; }
+    .kpi-sub   { font-size: 11px; color: #7C5A3C; margin-top: 4px; }
+
+    /* GRAPHIQUE */
+    .card { background: white; border-radius: 12px; padding: 20px; border: 1px solid #F4EEE6; }
+    .card-title { font-weight: 700; font-size: 14px; margin-bottom: 16px; color: #1C140E; }
+    .bar-chart { display: flex; align-items: flex-end; gap: 8px; height: 120px; }
+    .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .bar-val { font-size: 10px; color: #7C5A3C; font-weight: 600; }
+    .bar { width: 100%; border-radius: 4px 4px 0 0; min-height: 4px; }
+    .bar-label { font-size: 9px; color: #7C5A3C; text-align: center; }
+
+    /* SOURCES */
+    .source-row { margin-bottom: 10px; }
+    .source-header { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px; }
+    .source-name { font-weight: 600; }
+    .source-count { color: #7C5A3C; }
+    .progress-track { background: #F4EEE6; border-radius: 999px; height: 8px; overflow: hidden; }
+    .progress-fill  { height: 100%; border-radius: 999px; }
+
+    /* ALERTE */
+    .alert { background: #FFF5F5; border-radius: 12px; padding: 16px; border: 1px solid #FED7D7; }
+    .alert-inner { display: flex; gap: 12px; align-items: flex-start; }
+    .alert-icon { font-size: 24px; }
+    .alert-title { font-weight: 700; color: #C53030; font-size: 14px; margin-bottom: 4px; }
+    .alert-body  { font-size: 13px; color: #742A2A; line-height: 1.6; }
+    .alert-code  { background: #FED7D7; padding: 1px 6px; border-radius: 4px; font-size: 12px; font-family: monospace; }
+
+    /* AGENTS */
+    .agents-header {
+      background: linear-gradient(135deg, #43240F, #5C3317);
+      border-radius: 12px; padding: 20px; color: #FAF8F5;
+    }
+    .agents-header h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+    .agents-header p  { font-size: 13px; opacity: .8; line-height: 1.6; }
+    .agent-card {
+      background: white; border-radius: 12px; padding: 20px;
+      border: 1px solid #F4EEE6; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .agent-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .agent-info { display: flex; align-items: center; gap: 10px; }
+    .agent-icon { font-size: 24px; }
+    .agent-name { font-weight: 700; font-size: 15px; }
+    .btn-launch {
+      border: none; border-radius: 999px; padding: 8px 18px;
+      font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+      color: white; transition: opacity .2s;
+    }
+    .btn-launch:disabled { opacity: .5; cursor: not-allowed; }
+    .spinner {
+      display: flex; align-items: center; gap: 8px; color: #7C5A3C; font-size: 14px;
+    }
+    .spinner-circle {
+      width: 16px; height: 16px; border: 2px solid #F4EEE6;
+      border-top-color: #5C3317; border-radius: 50%;
+      animation: spin .8s linear infinite; flex-shrink: 0;
+    }
+    .agent-result {
+      background: #FAF8F5; border-radius: 8px; padding: 14px;
+      font-size: 13px; line-height: 1.7; white-space: pre-wrap;
+      max-height: 320px; overflow-y: auto; margin-top: 12px;
+    }
+
+    /* ACTIONS */
+    .todo-card { background: white; border-radius: 12px; padding: 20px; border: 1px solid #F4EEE6; }
+    .todo-card-title { font-weight: 700; font-size: 14px; margin-bottom: 16px; }
+    .todo-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px; border-radius: 8px; margin-bottom: 8px;
+    }
+    .todo-item.pending { background: #FAF8F5; border: 1px solid #F4EEE6; }
+    .todo-item.done    { background: #F0FFF4; border: 1px solid #C6F6D5; }
+    .todo-item.done span:last-child { text-decoration: line-through; opacity: .7; color: #276749; }
+    .todo-item.pending span:last-child { font-size: 14px; font-weight: 500; }
+    .todo-emoji { font-size: 16px; flex-shrink: 0; }
+
+    /* SCORE */
+    .score-card {
+      background: linear-gradient(135deg, #43240F, #5C3317);
+      border-radius: 12px; padding: 20px; color: #FAF8F5;
+    }
+    .score-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+    .score-row { margin-bottom: 10px; }
+    .score-header { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px; }
+    .score-pct { color: #C9A84C; font-weight: 700; }
+    .score-track { background: rgba(255,255,255,0.1); border-radius: 999px; height: 6px; }
+    .score-fill  { height: 100%; border-radius: 999px; background: linear-gradient(to right, #C9A84C, #E8A84C); }
+
+    ::-webkit-scrollbar       { width: 6px; }
+    ::-webkit-scrollbar-track { background: #F4EEE6; }
+    ::-webkit-scrollbar-thumb { background: #7C5A3C; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- MODALE CLE API -->
+<div id="api-modal">
+  <div class="modal-box">
+    <h2>&#128273; Cle API Anthropic</h2>
+    <p>Les agents IA appellent l'API Anthropic directement depuis le navigateur. Saisis ta cle pour activer les agents. Elle ne sera pas stockee.</p>
+    <input type="password" id="api-key-input" placeholder="sk-ant-..." autocomplete="off" />
+    <button id="btn-confirm">Confirmer</button>
+    <button id="btn-skip">Continuer sans agents IA</button>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <div class="logo-icon">S</div>
+    <div>
+      <div class="logo-name">Svelte<span>Shape</span></div>
+      <div class="logo-sub">Centre de Commande IA</div>
+    </div>
+  </div>
+  <div class="status-badge">&#128994; Boutique en ligne</div>
+</div>
+
+<!-- ONGLETS -->
+<div class="tabs">
+  <button class="tab-btn active" data-tab="dashboard">&#128202; Dashboard</button>
+  <button class="tab-btn"        data-tab="agents">&#129302; Agents IA</button>
+  <button class="tab-btn"        data-tab="todo">&#9989; Actions</button>
+</div>
+
+<div class="content">
+
+  <!-- ONGLET DASHBOARD -->
+  <div id="tab-dashboard" class="tab-panel active">
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">Sessions (7j)</div>
+        <div><span class="kpi-value">269</span><span class="kpi-trend" style="color:#E53E3E">&#8595;</span></div>
+        <div class="kpi-sub">vs 585 semaine passee</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">TikTok</div>
+        <div><span class="kpi-value">21</span><span class="kpi-trend" style="color:#E53E3E">&#8595;&#8595;</span></div>
+        <div class="kpi-sub">vs 406 semaine passee</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Conversions</div>
+        <div><span class="kpi-value">0</span><span class="kpi-trend" style="color:#7C5A3C">&#8212;</span></div>
+        <div class="kpi-sub">Objectif : 1ere commande</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Google Ads</div>
+        <div><span class="kpi-value">22,62&#8364;</span><span class="kpi-trend" style="color:#C9A84C">&#8594;</span></div>
+        <div class="kpi-sub">67 clics &middot; CTR 1,19%</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">&#128200; Sessions &mdash; 7 derniers jours</div>
+      <div class="bar-chart" id="bar-chart"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">&#127760; Sources de trafic cette semaine</div>
+      <div id="sources"></div>
+    </div>
+
+    <div class="alert">
+      <div class="alert-inner">
+        <div class="alert-icon">&#9888;&#65039;</div>
+        <div>
+          <div class="alert-title">TikTok : chute de 95% du trafic</div>
+          <div class="alert-body">
+            La semaine passee : 406 sessions. Cette semaine : 21 sessions.
+            <strong> Action immediate :</strong> Publier une nouvelle video + changer le lien bio vers
+            <span class="alert-code">getsvelteshape.fr/products/body-sculptant-marron</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ONGLET AGENTS -->
+  <div id="tab-agents" class="tab-panel">
+    <div class="agents-header">
+      <h3>&#129302; Agents IA SvelteShape</h3>
+      <p>Chaque agent analyse les donnees reelles de ta boutique et genere des recommandations concretes. Clique sur "Lancer" pour activer un agent.</p>
+    </div>
+    <div id="agents-list"></div>
+  </div>
+
+  <!-- ONGLET ACTIONS -->
+  <div id="tab-todo" class="tab-panel">
+    <div class="todo-card">
+      <div class="todo-card-title" style="color:#1C140E">&#127919; Actions prioritaires</div>
+      <div id="todo-pending"></div>
+    </div>
+    <div class="todo-card">
+      <div class="todo-card-title" style="color:#2D6A4F">&#9989; Deja accompli</div>
+      <div id="todo-done"></div>
+    </div>
+    <div class="score-card">
+      <div class="score-title">&#127942; Score boutique SvelteShape</div>
+      <div id="scores"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// --- CLE API ---
+var API_KEY = "";
+document.getElementById("btn-confirm").onclick = function() {
+  var v = document.getElementById("api-key-input").value.trim();
+  if (v) API_KEY = v;
+  document.getElementById("api-modal").classList.add("hidden");
+};
+document.getElementById("btn-skip").onclick = function() {
+  document.getElementById("api-modal").classList.add("hidden");
+};
+
+// --- ONGLETS ---
+document.querySelectorAll(".tab-btn").forEach(function(btn) {
+  btn.addEventListener("click", function() {
+    document.querySelectorAll(".tab-btn").forEach(function(b) { b.classList.remove("active"); });
+    document.querySelectorAll(".tab-panel").forEach(function(p) { p.classList.remove("active"); });
+    btn.classList.add("active");
+    document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+  });
+});
+
+// --- GRAPHIQUE SESSIONS ---
+var weeklyData = [
+  { day: "12", sessions: 22 },
+  { day: "13", sessions: 44 },
+  { day: "14", sessions: 108 },
+  { day: "15", sessions: 58 },
+  { day: "16", sessions: 22 },
+  { day: "17", sessions: 7 },
+  { day: "18", sessions: 2 }
+];
+var maxS = Math.max.apply(null, weeklyData.map(function(d) { return d.sessions; }));
+var chartEl = document.getElementById("bar-chart");
+weeklyData.forEach(function(d) {
+  var pct = Math.round((d.sessions / maxS) * 90);
+  var isMax = d.sessions === maxS;
+  var col = document.createElement("div");
+  col.className = "bar-col";
+  col.innerHTML =
+    '<div class="bar-val">' + d.sessions + '</div>' +
+    '<div class="bar" style="height:' + pct + 'px;background:' + (isMax ? 'linear-gradient(to top,#5C3317,#C9A84C)' : 'linear-gradient(to top,#5C331788,#5C331744)') + '"></div>' +
+    '<div class="bar-label">' + d.day + '</div>';
+  chartEl.appendChild(col);
+});
+
+// --- SOURCES ---
+var sources = [
+  { name: "Direct", sessions: 184, color: "#5C3317" },
+  { name: "Search", sessions: 64,  color: "#C9A84C" },
+  { name: "Social", sessions: 21,  color: "#E88C30" }
+];
+var total = 184 + 64 + 21;
+var srcEl = document.getElementById("sources");
+sources.forEach(function(s) {
+  var pct = Math.round(s.sessions / total * 100);
+  var row = document.createElement("div");
+  row.className = "source-row";
+  row.innerHTML =
+    '<div class="source-header"><span class="source-name">' + s.name + '</span><span class="source-count">' + s.sessions + ' sessions (' + pct + '%)</span></div>' +
+    '<div class="progress-track"><div class="progress-fill" style="width:' + pct + '%;background:' + s.color + '"></div></div>';
+  srcEl.appendChild(row);
+});
+
+// --- AGENTS ---
+var agents = [
+  { id: "analytics",   icon: "&#128202;", name: "Analytics Reporter",  color: "#5C3317" },
+  { id: "seo",         icon: "&#128269;", name: "SEO Content Writer",  color: "#2D6A4F" },
+  { id: "tiktok",      icon: "&#127916;", name: "TikTok Scripts",      color: "#1A1A2E" },
+  { id: "concurrents", icon: "&#127919;", name: "Concurrent Watcher",  color: "#7B2D8B" },
+  { id: "cro",         icon: "&#9889;",   name: "CRO Optimizer",       color: "#C25B0A" }
+];
+
+var prompts = {
+  analytics: "Tu es le directeur e-commerce de SvelteShape (getsvelteshape.fr), boutique francaise vendant un body sculptant invisible a 34,99EUR en 3 coloris (Noir, Beige, Marron).\n\nVoici les donnees analytics de la semaine (Shopify) :\n- Total sessions : 269\n- Sources : Direct 184, Search 64, Social (TikTok) 21\n- Sessions les 14 derniers jours : pic a 113 le 6 juin, puis chute a 2-7/jour cette semaine\n- 0 conversion a ce jour\n- Google Ads : 67 clics, 22,62EUR depenses, CTR 1,19%\n- TikTok : 99% taux de rebond, duree moyenne 1,8 secondes\n\nGenere un rapport analytics complet avec :\n1. Bilan de la semaine\n2. Analyse des sources de trafic\n3. Diagnostic du probleme TikTok\n4. 3 actions prioritaires cette semaine\n5. Objectif pour la semaine prochaine\n\nSois direct, concis et oriente resultats. Reponds en francais.",
+  seo: "Tu es expert SEO pour SvelteShape (getsvelteshape.fr), boutique shapewear premium francaise.\n\nContexte :\n- Produit : body sculptant invisible 34,99EUR, 3 coloris, S a 4XL\n- Articles existants : guide choisir body gainant, body sous robe soiree, body vs gaine amincissante\n- Concurrents bien positionnes : Elya Shapewear, Passion Corset\n- Trafic SEO actuel : 64 sessions/semaine avec 38% de rebond (tres bon)\n\nGenere :\n1. 3 idees d'articles SEO a fort potentiel\n2. 5 mots-cles longue traine a cibler en priorite\n3. 2 optimisations on-page a faire sur les fiches produit\n4. Plan de contenu pour le mois prochain\n\nReponds en francais, sois precis et actionnable.",
+  tiktok: "Tu es expert content creator TikTok pour SvelteShape, body sculptant invisible premium francais a 34,99EUR.\n\nContexte :\n- 406 vues TikTok la semaine derniere mais 99% de rebond sur le site\n- Probleme : lien bio pointe vers la homepage au lieu de la fiche produit\n- Cible : femmes 25-45 ans, francaises\n- Avantages produit : invisible sous les vetements, S a 4XL, 3 coloris (marron tendance 2025), 34,99EUR, Klarna 3x\n\nGenere 3 scripts TikTok complets :\n- Script 1 : Hook choc avant/apres (30 secondes)\n- Script 2 : POV storytelling emotionnel (45 secondes)\n- Script 3 : Tendance coloris marron 2025 (20 secondes)\n\nPour chaque script : hook, texte complet, texte a l'ecran, son recommande, CTA final.\nReponds en francais, style naturel TikTok.",
+  concurrents: "Tu es analyste concurrentiel pour SvelteShape (getsvelteshape.fr).\n\nContexte SvelteShape :\n- Body sculptant 34,99EUR, Noir/Beige/Marron, S-4XL\n- Theme Dawn premium, Klarna 3x, livraison offerte, garantie 30j\n- Blog SEO lance, 3 articles publies\n\nConcurrents :\n- Elya Shapewear : 44,99-49,99EUR, fabrique Portugal, blog SEO fort\n- Passion Corset : 49,90EUR, 1 produit, avis verifies\n\nGenere :\n1. Nos 5 avantages concurrentiels cles\n2. 3 menaces immediates a surveiller\n3. 2 opportunites de differenciation non exploitees\n4. Actions marketing a lancer cette semaine\n5. Recommandation de positionnement prix\n\nReponds en francais, sois strategique et actionnable.",
+  cro: "Tu es expert CRO pour SvelteShape (getsvelteshape.fr).\n\nDonnees :\n- 269 sessions cette semaine, 0 conversion\n- Rebond TikTok : 99%, Google Ads : 73%, SEO : 38%\n- Produit : 34,99EUR, Klarna 3x disponible\n- En place : sticky ATC, offre flash -30%, garantie 30j\n- Manque : vrais avis clients, numero de telephone\n\nGenere :\n1. Diagnostic du tunnel de conversion\n2. Les 3 plus gros freins a l'achat\n3. 5 micro-optimisations cette semaine (quick wins)\n4. Plan A/B test sur la fiche produit\n5. Taux de conversion cible realiste\n\nReponds en francais, meilleures pratiques e-commerce 2025."
+};
+
+var agentsList = document.getElementById("agents-list");
+agents.forEach(function(agent) {
+  var card = document.createElement("div");
+  card.className = "agent-card";
+  card.innerHTML =
+    '<div class="agent-top">' +
+      '<div class="agent-info">' +
+        '<span class="agent-icon">' + agent.icon + '</span>' +
+        '<span class="agent-name">' + agent.name + '</span>' +
+      '</div>' +
+      '<button class="btn-launch" id="btn-' + agent.id + '" style="background:' + agent.color + '">Lancer</button>' +
+    '</div>' +
+    '<div id="state-' + agent.id + '"></div>' +
+    '<div id="result-' + agent.id + '" class="agent-result" style="display:none;border-left:3px solid ' + agent.color + '"></div>';
+  agentsList.appendChild(card);
+
+  document.getElementById("btn-" + agent.id).onclick = function() {
+    var btn = document.getElementById("btn-" + agent.id);
+    var stateEl = document.getElementById("state-" + agent.id);
+    var resultEl = document.getElementById("result-" + agent.id);
+    btn.disabled = true;
+    btn.textContent = "...";
+    stateEl.innerHTML = '<div class="spinner"><div class="spinner-circle"></div>Agent en train d\'analyser...</div>';
+    resultEl.style.display = "none";
+    callClaude(prompts[agent.id], function(text) {
+      stateEl.innerHTML = "";
+      resultEl.textContent = text;
+      resultEl.style.display = "block";
+      btn.disabled = false;
+      btn.textContent = "Relancer";
+    });
+  };
+});
+
+function callClaude(prompt, callback) {
+  if (!API_KEY) {
+    callback("Aucune cle API configuree. Recharge la page et saisis ta cle Anthropic.");
+    return;
+  }
+  fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": API_KEY,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1000,
+      messages: [{ role: "user", content: prompt }]
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) callback("Erreur API : " + data.error.message);
+    else callback(data.content && data.content[0] ? data.content[0].text : "Erreur de reponse.");
+  })
+  .catch(function(e) { callback("Erreur reseau : " + e.message); });
+}
+
+// --- TODO ---
+var todos = [
+  { done: false, emoji: "&#128308;", task: "Changer lien bio TikTok vers fiche produit marron" },
+  { done: false, emoji: "&#128308;", task: "Installer Judge.me (vrais avis clients)" },
+  { done: false, emoji: "&#128993;", task: "Publier 3 videos TikTok cette semaine" },
+  { done: false, emoji: "&#128993;", task: "Configurer Zoho Mail (recevoir reponses)" },
+  { done: false, emoji: "&#128993;", task: "Ajouter numero de telephone footer" },
+  { done: true,  emoji: "&#9989;",   task: "Migration Copyfy vers Dawn" },
+  { done: true,  emoji: "&#9989;",   task: "Klarna 3x affiche" },
+  { done: true,  emoji: "&#9989;",   task: "Blog SEO + 3 articles publies" },
+  { done: true,  emoji: "&#9989;",   task: "Email pro contact@getsvelteshape.fr" },
+  { done: true,  emoji: "&#9989;",   task: "Sticky ATC mobile" }
+];
+var pendingEl = document.getElementById("todo-pending");
+var doneEl    = document.getElementById("todo-done");
+todos.forEach(function(t) {
+  var el = document.createElement("div");
+  el.className = "todo-item " + (t.done ? "done" : "pending");
+  el.innerHTML = '<span class="todo-emoji">' + t.emoji + '</span><span>' + t.task + '</span>';
+  (t.done ? doneEl : pendingEl).appendChild(el);
+});
+
+// --- SCORES ---
+var scoreItems = [
+  { label: "Design & Branding", score: 95 },
+  { label: "SEO Technique",     score: 80 },
+  { label: "Conversion (CRO)",  score: 65 },
+  { label: "Trafic",            score: 45 },
+  { label: "Social Proof",      score: 30 }
+];
+var scoresEl = document.getElementById("scores");
+scoreItems.forEach(function(item) {
+  var row = document.createElement("div");
+  row.className = "score-row";
+  row.innerHTML =
+    '<div class="score-header"><span>' + item.label + '</span><span class="score-pct">' + item.score + '%</span></div>' +
+    '<div class="score-track"><div class="score-fill" style="width:' + item.score + '%"></div></div>';
+  scoresEl.appendChild(row);
+});
+</script>
+</body>
+</html>
